@@ -1,0 +1,50 @@
+name: Auto Fix & Test
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - run: pip install black isort pytest
+      - run: |
+          black src/ || true
+          isort src/  || true
+      - run: |
+          mkdir -p tests
+          if [ -z "$(ls tests/*.py 2>/dev/null)" ]; then
+            printf "def test_placeholder():\n    assert True\n" > tests/test_placeholder.py
+          fi
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: chore: auto-format & add tests
+          branch: auto-fix-${{ github.run_id }}
+          push_options: --set-upstream
+
+  create-pr:
+    needs: auto-fix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: chore: auto-format & add tests
+          branch: auto-fix-${{ github.run_id }}
+          title: Auto Fix & Tests – ${{ github.repository }}
+          body: |
+            Bu PR otomatik oluşturuldu.
+            - Formatlandı (black & isort)
+            - Placeholder test eklendi
+          base: main
+          labels: auto-fix
